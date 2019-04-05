@@ -1,7 +1,7 @@
 # define default varaibles
 in_file?=gol_init.txt
 out_file?=gol_result.out
-gens?=2
+gens?=20
 
 
 comp:
