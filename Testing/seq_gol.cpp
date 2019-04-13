@@ -13,6 +13,10 @@ using namespace std;
 // prototype function(s)
 void pop_org_gol_map(ifstream &init_data, int **org_mat);
 void const_ext_gol_map(int **curr_mat, int org_rows, int org_cols, int **ext_mat);
+void print_matrix(int **mat, int r, int c);
+void fill_matrix(int **mat, int r, int c, int val);
+void write_matrix_inline(int **mat, int r, int c, ofstream &f);
+
 int pop_nxt_gol_map(int** ext_mat, int ext_rows, int ext_cols, int **nxt_mat);
 int get_org_gol_rows(ifstream &init_data);
 int get_org_gol_cols(ifstream &init_data);
@@ -50,15 +54,19 @@ int main(int argc, char* argv[])
 	// cout << "out_file_loc: " << out_file_loc << " of type " << typeid(out_file_loc).name() << endl;
 
 	ifstream in_file;
-	fstream out_file;
+	ofstream out_file;
 
   in_file.open(cmd_in_file);
-  out_file.open(cmd_out_file);
+  out_file.open(cmd_out_file, ofstream::out | ofstream::trunc);
   
   int org_gol_rows = get_org_gol_rows(in_file);
   int org_gol_cols = get_org_gol_cols(in_file);
+
   int ext_gol_rows = org_gol_rows + 2;
   int ext_gol_cols = org_gol_cols + 2;
+
+  int nxt_gol_rows = org_gol_rows;
+  int nxt_gol_cols = org_gol_cols;
 
 
   cout << "ROWS:COLS " << org_gol_rows << ":" << org_gol_cols << endl;
@@ -68,7 +76,7 @@ int main(int argc, char* argv[])
   int **org_gol_map, **ext_gol_map, **nxt_gol_map;
   org_gol_map = (int**)malloc(org_gol_rows * sizeof(int*));
   ext_gol_map = (int**)malloc(ext_gol_rows * sizeof(int*));
-  nxt_gol_map = (int**)malloc(org_gol_rows * sizeof(int*));
+  nxt_gol_map = (int**)malloc(nxt_gol_rows * sizeof(int*));
 
 	for(int d = 0; d < org_gol_rows; d++)
 	{
@@ -80,111 +88,57 @@ int main(int argc, char* argv[])
 	}
 	for(int n = 0; n < org_gol_rows; n++)
 	{
-		nxt_gol_map[n] = (int*)malloc(org_gol_cols * sizeof(int));
+		nxt_gol_map[n] = (int*)malloc(nxt_gol_cols * sizeof(int));
 	}
 
 
 	cout << "Original Game of Life Map (BEFORE population):" << endl;
-	for(int i = 0; i < org_gol_rows; i++)
-	{
-		for(int j = 0; j < org_gol_cols; j++)
-		{
-			org_gol_map[i][j] = -1; // initialize the original generation matrix with all -1s
-			cout << org_gol_map[i][j] << "\t";
-		}
-		cout << endl;
-	}
+	fill_matrix(org_gol_map, org_gol_rows, org_gol_cols, -1);
+	print_matrix(org_gol_map, org_gol_rows, org_gol_cols);
+
 
 	cout << "Extended Game of Life Map (BEFORE population):" << endl;
-	for(int i = 0; i < ext_gol_rows; i++)
-	{
-		for(int j = 0; j < ext_gol_cols; j++)
-		{
-			ext_gol_map[i][j] = -2; // initialize the extended generation matrix with all -2s
-			cout << ext_gol_map[i][j] << "\t";
-		}
-		cout << endl;
-	}
+	fill_matrix(ext_gol_map, ext_gol_rows, ext_gol_cols, -2);
+	print_matrix(ext_gol_map, ext_gol_rows, ext_gol_cols);
+
 
 	cout << "Next Generation Game of Life Map (BEFORE population):" << endl;
-	for(int i = 0; i < org_gol_rows; i++)
-	{
-		for(int j = 0; j < org_gol_cols; j++)
-		{
-			nxt_gol_map[i][j] = -3; // initialize the next generation matrix with all -3s
-			cout << nxt_gol_map[i][j] << "\t";
-		}
-		cout << endl;
-	}
+	fill_matrix(nxt_gol_map, nxt_gol_rows, nxt_gol_cols, -3);
+	print_matrix(nxt_gol_map, nxt_gol_rows, nxt_gol_cols);
 
 
 	pop_org_gol_map(in_file, org_gol_map); // populate the original generation matrix with the values given in <in_file>
-
 	cout << "Original Game of Life Map (Generation 1):" << endl;
-	for(int i = 0; i < org_gol_rows; i++)
-	{
-		for(int j = 0; j < org_gol_cols; j++)
-		{
-			cout << org_gol_map[i][j] << "\t";
-		}
-		cout << endl;
-	}
+	print_matrix(org_gol_map, org_gol_rows, org_gol_cols);
 
 
 	const_ext_gol_map(org_gol_map, org_gol_rows, org_gol_cols, ext_gol_map); // construct extended generation matrix based on original matrix
-
 	cout << "Extended Game of Life Map (Generation 1):" << endl;
-	for(int i = 0; i < ext_gol_rows; i++)
-	{
-		for(int j = 0; j < ext_gol_cols; j++)
-		{
-			cout << ext_gol_map[i][j] << "\t";
-		}
-		cout << endl;
-	}
+	print_matrix(ext_gol_map, ext_gol_rows, ext_gol_cols);
 
 
 	pop_nxt_gol_map(ext_gol_map, ext_gol_rows, ext_gol_cols, nxt_gol_map);
-
 	cout << "Next Generation Game of Life Map (Generation 1):" << endl;
-	for(int i = 0; i < org_gol_rows; i++)
-	{
-		for(int j = 0; j < org_gol_cols; j++)
-		{
-			cout << nxt_gol_map[i][j] << "\t";
-		}
-		cout << endl;
-	}
+	print_matrix(nxt_gol_map, nxt_gol_rows, nxt_gol_cols);
 
 	// ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
 
 	for(int g = 2; g <= gens; g++)
 	{
-		const_ext_gol_map(nxt_gol_map, org_gol_rows, org_gol_cols, ext_gol_map); //construct the next extended generation matrix based on current generation matrix
+		const_ext_gol_map(nxt_gol_map, nxt_gol_rows, nxt_gol_cols, ext_gol_map); //construct the next extended generation matrix based on current generation matrix
+
 
 		cout << "Extended Game of Life Map: (Generation " << g << ")" << endl;
-		for(int i = 0; i < ext_gol_rows; i++)
-		{
-			for(int j = 0; j < ext_gol_cols; j++)
-			{
-				cout << ext_gol_map[i][j] << "\t";
-			}
-			cout << endl;
-		}
+		print_matrix(ext_gol_map, ext_gol_rows, ext_gol_cols);
 
 
 		int dead_cells = pop_nxt_gol_map(ext_gol_map, ext_gol_rows, ext_gol_cols, nxt_gol_map);
 
+
 		cout << "Next Generation Game of Life Map: (Generation " << g << ")" << endl;
-		for(int i = 0; i < org_gol_rows; i++)
-		{
-			for(int j = 0; j < org_gol_cols; j++)
-			{
-				cout << nxt_gol_map[i][j] << "\t";
-			}
-			cout << endl;
-		}
+		print_matrix(nxt_gol_map, nxt_gol_rows, nxt_gol_cols);
+
 
 		if(dead_cells == org_gol_rows * org_gol_cols)
 		{
@@ -194,16 +148,9 @@ int main(int argc, char* argv[])
 	}
 
 
-
 	// after all generations have been run OR everyone dies, write the result(s) to the output file
 	out_file << org_gol_rows << " " << org_gol_cols << endl;
-	for(int i = 0; i < org_gol_rows; i++)
-	{
-		for(int j = 0; j < org_gol_cols; j++)
-		{
-			out_file << nxt_gol_map[i][j] << " ";
-		}
-	}
+	write_matrix_inline(nxt_gol_map, nxt_gol_rows, nxt_gol_cols, out_file);
 
 
   in_file.close();
@@ -212,6 +159,52 @@ int main(int argc, char* argv[])
   return 0;
 }
 
+
+
+// ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+// PROTOTYPED FUNCTIONS:
+
+
+void print_matrix(int **mat, int r, int c)
+{
+	for(int i = 0; i < r; i++)
+	{
+		for(int j = 0; j < c; j++)
+		{
+			cout << mat[i][j] << "\t";
+		}
+		cout << endl;
+	}	
+}
+
+
+void fill_matrix(int **mat, int r, int c, int val)
+{
+	for(int i = 0; i < r; i++)
+	{
+		for(int j = 0; j < c; j++)
+		{
+			mat[i][j] = val;
+		}
+	}	
+}
+
+
+void write_matrix_inline(int **mat, int r, int c, ofstream &f)
+{
+	for(int i = 0; i < r; i++)
+	{
+		for(int j = 0; j < c; j++)
+		{
+			if((i+1)*(j+1) == (r*c))
+			{
+				f << mat[i][j];
+				break;
+			}
+			f << mat[i][j] << " ";
+		}
+	}
+}
 
 
 void pop_org_gol_map(ifstream &init_data, int **org_mat)

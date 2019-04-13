@@ -1,6 +1,6 @@
 # define default varaibles
-in_file?=gol_init.txt
-out_file?=gol_result.out
+in_file?=init_gol.txt
+out_file?=result_gol.out
 gens?=20
 
 
@@ -9,12 +9,6 @@ comp:
 
 run:
 	./seq_gol $(in_file) $(gens) $(out_file)
-
-debug:
-	# mpiCC -g mpi_test.cpp
-
-gdb:
-	# mpiexec -d -np $(procs) ./mpi_bcast $(ruut)
 
 clean:
 	rm seq_gol
