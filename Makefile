@@ -1,20 +1,22 @@
 # define default varaibles
+procs?=3
 in_file?=init_gol.txt
-out_file?=result_gol.out
+threads?=3
 gens?=20
+out_file?=result_gol.out
 
 
 comp:
-	g++ -o seq_gol seq_gol.cpp
+	mpiCC -o hybrid_gol hybrid_gol.cpp
 
 run:
-	./seq_gol $(in_file) $(gens) $(out_file)
+	mpirun -np $(procs) ./hybrid_gol $(in_file) $(threads) $(gens) $(out_file)
 
 debug:
-	# mpiCC -g mpi_test.cpp
+	# mpiCC -g hybrid_gol.cpp
 
 gdb:
-	# mpiexec -d -np $(procs) ./mpi_bcast $(ruut)
+	# mpiexec -d -np $(procs) ./hybrid_gol $(in_file) $(threads) $(gens) $(out_file)
 
 clean:
-	rm seq_gol
+	rm hybrid_gol
