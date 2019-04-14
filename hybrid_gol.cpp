@@ -27,18 +27,18 @@ int get_org_gol_cols(ifstream &init_data);
 // start main
 int main(int argc, char* argv[])
 {
-	if(argc != 5 && world_rank == 0)
-  {
-    cout << "HYBRID_ERR_ARG:ARGC => Wrong number of command line arguments.\nUse \"./<executable> <in_file> <threads> <gens> <out_file>\" as format.\n";
-    return -5;
-  }
-
-
   // initialize the MPI environment
   MPI_Init(NULL, NULL);
   int world_size, world_rank;
   MPI_Comm_size(MPI_COMM_WORLD, &world_size); // get the number of processes
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank); // get the ranks for each individual process
+
+
+  if(argc != 5 && world_rank == 0)
+  {
+    cout << "HYBRID_ERR_ARG:ARGC => Wrong number of command line arguments.\nUse \"./<executable> <in_file> <threads> <gens> <out_file>\" as format.\n";
+    return -5;
+  }
 
 
   double start_time, init_time, gol_time; // scope the time variables
@@ -125,26 +125,34 @@ int main(int argc, char* argv[])
 
 		cout << "Next Generation Game of Life Map (BEFORE population):" << endl;
 		fill_matrix(nxt_gol_map, nxt_gol_rows, nxt_gol_cols, -3);
-		print_matrix(nxt_gol_map, nxt_gol_rows, nxt_gol_cols);
+		print_matrix(nxt_gol_map, nxt_gol_rows, nxt_gol_cols);	
+	}
 
 
-		init_time = MPI_Wtime() - start_time; // sequential matrices creation and initialization time
+	pop_org_gol_map(in_file, org_gol_map); // populate the original generation matrix with the values given in <in_file>
 
-	
-		pop_org_gol_map(in_file, org_gol_map); // populate the original generation matrix with the values given in <in_file>
+
+	if(world_rank == 0)
+	{
 		cout << "Original Game of Life Map (Generation 1):" << endl;
 		print_matrix(org_gol_map, org_gol_rows, org_gol_cols);
+
+		init_time = MPI_Wtime() - start_time; // sequential matrices creation and initialization time
 	}
 
 
 	MPI_Barrier(MPI_COMM_WORLD); // wait for all processors before extended matrix construction and next matrix population
 
+
+	const_ext_gol_map(org_gol_map, org_gol_rows, org_gol_cols, ext_gol_map); // construct extended generation matrix based on original matrix
+
+
 	if(world_rank == 0)
 	{
-		const_ext_gol_map(org_gol_map, org_gol_rows, org_gol_cols, ext_gol_map); // construct extended generation matrix based on original matrix
 		cout << "Extended Game of Life Map (Generation 1):" << endl;
 		print_matrix(ext_gol_map, ext_gol_rows, ext_gol_cols);
 	}
+	MPI_Barrier(MPI_COMM_WORLD); // preserve print order
 
 
 	// populate next generation matrix in parallel
@@ -166,21 +174,39 @@ int main(int argc, char* argv[])
 
 	for(int g = 2; g <= gens; g++)
 	{
+		const_ext_gol_map(nxt_gol_map, nxt_gol_rows, nxt_gol_cols, ext_gol_map); //construct the next extended generation matrix based on current generation matrix
+
 		if(world_rank == 0)
 		{
-			const_ext_gol_map(nxt_gol_map, nxt_gol_rows, nxt_gol_cols, ext_gol_map); //construct the next extended generation matrix based on current generation matrix
 			cout << "Extended Game of Life Map: (Generation " << g << ")" << endl;
 			print_matrix(ext_gol_map, ext_gol_rows, ext_gol_cols);
 		}
+		MPI_Barrier(MPI_COMM_WORLD); // preserve print order
 
 
 		int dead_cells = pop_nxt_gol_map(ext_gol_map, ext_gol_rows, ext_gol_cols, nxt_gol_map, thread_count);
+
 
 		if(world_rank == 0)
 		{
 			cout << "Next Generation Game of Life Map: (Generation " << g << ")" << endl;
 			print_matrix(nxt_gol_map, nxt_gol_rows, nxt_gol_cols);
 		}
+		MPI_Barrier(MPI_COMM_WORLD); // preserve print order
+
+
+		int curr_rank = 0;
+	  while(curr_rank < world_size)
+	  {
+	    if(world_rank == curr_rank)
+	    {
+	      cout << world_rank << ": dead count: " << dead_cells << endl;
+	    }
+	   curr_rank++;
+	   MPI_Barrier(MPI_COMM_WORLD); // barricade processes to print messages in correct order
+	  }
+	  MPI_Barrier(MPI_COMM_WORLD);
+
 
 		if(dead_cells == org_gol_rows * org_gol_cols)
 		{
@@ -254,19 +280,15 @@ int pop_nxt_gol_map(int** ext_mat, int ext_rows, int ext_cols, int **nxt_mat, in
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank); // get the ranks for each individual process
 
 
-  // dont let <th_cnt_per_proc> exceed <mpi_chunk_sz>
-  int mpi_max = floor(org_rows / world_size);
-  if(th_cnt > mpi_max)
-  	th_cnt = mpi_max;
-
-
 	// public variables per thread
 	int dead_cnt = 0; // counter for how many dead cells will be in the next generation
 	int org_rows = ext_rows-2;
 
 
-	if(world_rank == 0)
-		cout "MPI_MAX:TH_CNT" << mpi_max << ":" << th_cnt << endl;
+  // dont let <th_cnt_per_proc> exceed <mpi_chunk_sz>
+  int mpi_max = floor(org_rows / world_size);
+  if(th_cnt > mpi_max)
+  	th_cnt = mpi_max;
 
 
   #pragma omp parallel num_threads(th_cnt)
@@ -280,20 +302,15 @@ int pop_nxt_gol_map(int** ext_mat, int ext_rows, int ext_cols, int **nxt_mat, in
 		int mpi_chunk_sz = floor(org_rows / world_size);
 	  int omp_chunk_sz = floor(mpi_chunk_sz / th_cnt_per_proc);
 
+
 		if(world_rank == world_size - 1)
 		{
 			int btm_mpi_chunk_sz = org_rows - ((world_size - 1) * mpi_chunk_sz);
 			omp_chunk_sz = btm_mpi_chunk_sz / th_cnt_per_proc;
 		}
 
-		omp_thread_row_start = (mpi_chunk_sz * world_rank) + (omp_chunk_sz * thread_ID);
-		omp_thread_row_end = omp_thread_row_start + (omp_chunk_sz - 1);
-
-		if(world_rank == 0 || world_rank == 1)
-		{
-			cout "thread_ID: " << thread_ID << endl;
-		}
-
+		int omp_thread_row_start=(mpi_chunk_sz * world_rank) + (omp_chunk_sz * thread_ID);
+		int omp_thread_row_end = omp_thread_row_start + (omp_chunk_sz-1);
 
 
 		for(int i = omp_thread_row_start + 1; i <= omp_thread_row_end; i++)
@@ -329,9 +346,10 @@ int pop_nxt_gol_map(int** ext_mat, int ext_rows, int ext_cols, int **nxt_mat, in
 				curr_sum = 0; // reset the current neighbor sum
 			}
 		}
-		if(world_rank == 0 && thread_ID == 0)
-			return dead_cnt;
 	}
+
+	if(world_rank == 0)
+		return dead_cnt;
 }
 
 
