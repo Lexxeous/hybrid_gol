@@ -129,41 +129,54 @@ int main(int argc, char* argv[])
 	// DO MPI SENDS SEQUENTIALLY TO POPULATE EVERY PRX TOP AND BOTTOM ROW
 	// int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm);
 	// int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status * status);
-	MPI_Request req;
-	for(int i = 0; i < world_size; i++)
+	for(int proc_i = 0; proc_i < world_size; proc_i++)
 	{
-		if(world_rank == i)
+		if(world_rank == proc_i)
 		{
-			MPI_Recv(&prx_gol_map[prx_rows - 1][1], map_cols, MPI_INT, (i + 1) % world_size, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // recv btm
+			MPI_Recv(&prx_gol_map[prx_rows - 1][1], map_cols, MPI_INT, (proc_i + 1) % world_size, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // recv btm
 		}
 
-		if(world_rank == (i + 1) % world_size)
+		if(world_rank == (proc_i + 1) % world_size)
 		{
-			MPI_Send(&cur_gol_map[row_start][0], map_cols, MPI_INT, i, 1, MPI_COMM_WORLD); // send top
+			MPI_Send(&cur_gol_map[row_start][0], map_cols, MPI_INT, proc_i, 1, MPI_COMM_WORLD); // send top
 		}
 
 
-		if(world_rank == i)
+		if(world_rank == proc_i)
 		{
 			if(world_rank - 1 < 0)
-				i = world_size;
-			MPI_Recv(&prx_gol_map[0][1], map_cols, MPI_INT, (i - 1) % world_size, 99, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // recv top
+				proc_i = world_size;
+			MPI_Recv(&prx_gol_map[0][1], map_cols, MPI_INT, (proc_i - 1) % world_size, 99, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // recv top
 			if(world_rank - 1 < 0)
-				i = 0;
+				proc_i = 0;
 		}
 
-		if((i == 0) && (world_rank == world_size - 1)) // when i == 0
+		if((proc_i == 0) && (world_rank == world_size - 1)) // when proc_i == 0
 		{
-			MPI_Send(&cur_gol_map[row_start + prx_rows - 3][0], map_cols, MPI_INT, i, 99, MPI_COMM_WORLD); //send btm
+			MPI_Send(&cur_gol_map[row_start + prx_rows - 3][0], map_cols, MPI_INT, proc_i, 99, MPI_COMM_WORLD); //send btm
 		}
 
-		if(world_rank == ((i - 1) % world_size)) // when i != 0
+		if(world_rank == ((proc_i - 1) % world_size)) // when proc_i != 0
 		{
-			MPI_Send(&cur_gol_map[row_start + prx_rows - 3][0], map_cols, MPI_INT, i, 99, MPI_COMM_WORLD); // send btm
+			MPI_Send(&cur_gol_map[row_start + prx_rows - 3][0], map_cols, MPI_INT, proc_i, 99, MPI_COMM_WORLD); // send btm
 		}
 	}
 
-	// USE ALREADY POPULATED PRX VALUES TO GENERATE THE RIGHT AND LEFT COLS AND CORNERS
+
+	// USE ALREADY POPULATED PRX VALUES TO DETERMINE CORNERS
+	prx_gol_map[0][0] = prx_gol_map[0][prx_cols - 2];
+	prx_gol_map[0][prx_cols - 1] = prx_gol_map[0][1];
+	prx_gol_map[prx_rows - 1][0] = prx_gol_map[prx_rows - 1][prx_cols - 2];
+	prx_gol_map[prx_rows - 1][prx_cols - 1] = prx_gol_map[prx_rows - 1][1];
+
+
+	// USE ALREADY POPULATED PRX VALUES TO DETERMINE RIGHT AND LEFT COLUMNS
+	for(int prx_lr = 0; prx_lr < prx_rows - 2; prx_lr++)
+	{
+		prx_gol_map[prx_lr + 1][0] = prx_gol_map[prx_lr + 1][prx_cols - 2];
+		prx_gol_map[prx_lr + 1][prx_cols - 1] = prx_gol_map[prx_lr + 1][1];
+	}
+
 
 	// COMPUTE NEXT GEN MAP WITH EACH PRX SECTION
 	// COPY NEXT TO CURR GOL MATRIX
@@ -224,7 +237,7 @@ int main(int argc, char* argv[])
 
 void const_ext_gol_map(int **curr_mat, int cur_rows, int cur_cols, int **ext_mat)
 {
-	// populat the corners of the ext_gol_map, in order, clockwise
+	// populate the corners of the ext_gol_map, in order, clockwise
 	ext_mat[0][0] = curr_mat[cur_rows-1][cur_cols-1]; // first corner
 	ext_mat[0][cur_cols+1] = curr_mat[cur_rows-1][0]; // second corner
 	ext_mat[cur_rows+1][cur_cols+1] = curr_mat[0][0]; // third corner
