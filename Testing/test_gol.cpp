@@ -15,7 +15,7 @@ using namespace std;
 
 // prototype function(s)
 void init_gol_map(ifstream &init_data, int **mat);
-void const_ext_gol_map(int **curr_mat, int cur_rows, int cur_cols, int **ext_mat);
+// void const_ext_gol_map(int **curr_mat, int cur_rows, int cur_cols, int **ext_mat);
 void print_matrix(int **mat, int r, int c);
 void fill_matrix(int **mat, int r, int c, int val);
 void write_matrix_inline(int **mat, int r, int c, ofstream &f);
@@ -23,7 +23,7 @@ void copy_matrix(int **dest_mat, int **copy_mat, int r, int c);
 void allocate_gen_matrices(int r, int c);
 void allocate_prx_matrices(int r, int c);
 
-// int pop_nxt_gol_map(int** ext_mat, int ext_rows, int ext_cols, int **nxt_mat, int th_cnt);
+void pop_nxt_gol_map(int ptx_rows, int ptx_cols, int th_cnt, int mpi_chunk_sz);
 int get_map_rows(ifstream &init_data);
 int get_map_cols(ifstream &init_data);
 
@@ -179,27 +179,38 @@ int main(int argc, char* argv[])
 
 
 	// COMPUTE NEXT GEN MAP WITH EACH PRX SECTION
-	// COPY NEXT TO CURR GOL MATRIX
+	pop_nxt_gol_map(prx_rows, prx_cols, thread_count, mpi_chunk_sz);
+
+
+	// SEND INDIVIDUAL PORTIONS OF NEXT GOL MAP TO OTHER PROCESSORS TO FORM CURRENT GOL MAP FOR EACH
+	for(int proc_i = 0; proc_i < world_size; proc_i++)
+	{
+		
+	}
+
+
 	// REPEAT
 
 
 	int curr_rank = 0;
   while(curr_rank < world_size)
   {
+  	MPI_Barrier(MPI_COMM_WORLD);
     if(world_rank == curr_rank)
     {
-   		// cout << world_rank << ": CURRENT" << endl;
-			// print_matrix(cur_gol_map, map_rows, map_cols);
-			// cout << world_rank << ": NEXT" << endl;
-			// print_matrix(nxt_gol_map, map_rows, map_cols);
+   		cout << world_rank << ": CURRENT" << endl;
+			print_matrix(cur_gol_map, map_rows, map_cols);
+			cout << world_rank << ": NEXT" << endl;
+			print_matrix(nxt_gol_map, map_rows, map_cols);
 			cout << world_rank << ": prx_rows: " << prx_rows << endl;
 			cout << world_rank << ": prx_cols: " << prx_cols << endl;
 			// cout << world_rank << ": PARTIAL EXTENDED" << endl;
 			print_matrix(prx_gol_map, prx_rows, prx_cols);
     }
-   curr_rank++;
-   MPI_Barrier(MPI_COMM_WORLD); // barricade processes to print messages in correct order
+    MPI_Barrier(MPI_COMM_WORLD); // barricade processes to print messages in correct order
+  	curr_rank++;
   }
+  MPI_Barrier(MPI_COMM_WORLD);
   
 
 
@@ -235,117 +246,118 @@ int main(int argc, char* argv[])
 // PROTOTYPED FUNCTIONS:
 
 
-void const_ext_gol_map(int **curr_mat, int cur_rows, int cur_cols, int **ext_mat)
-{
-	// populate the corners of the ext_gol_map, in order, clockwise
-	ext_mat[0][0] = curr_mat[cur_rows-1][cur_cols-1]; // first corner
-	ext_mat[0][cur_cols+1] = curr_mat[cur_rows-1][0]; // second corner
-	ext_mat[cur_rows+1][cur_cols+1] = curr_mat[0][0]; // third corner
-	ext_mat[cur_rows+1][0] = curr_mat[0][cur_cols-1]; // fourth corner
-
-	// copy all values from "cur_gol_map" to the center of "ext_gol_map"
-	for(int i = 0; i < cur_rows; i++)
-	{
-		for(int j = 0; j < cur_cols; j++)
-		{
-			ext_mat[i+1][j+1] = curr_mat[i][j];
-		}
-	}
-
-	// copy the top and bottom rows of "cur_gol_map", swap them, an assign them to "ext_gol_map"
-	for(int j = 0; j < cur_cols; j++)
-	{
-		ext_mat[0][j+1] = curr_mat[cur_rows-1][j];
-		ext_mat[cur_rows+1][j+1] = curr_mat[0][j];
-	}
-
-	// copy the left and right cols of "cur_gol_map", swap them, an assign them to "ext_gol_map"
-	for(int i = 0; i < cur_rows; i++)
-	{
-		ext_mat[i+1][0] = curr_mat[i][cur_cols-1];
-		ext_mat[i+1][cur_cols+1] = curr_mat[i][0];
-	}
-}
-
-
-// int pop_nxt_gol_map(int** ext_mat, int ext_rows, int ext_cols, int **nxt_mat, int th_cnt)
+// void const_ext_gol_map(int **curr_mat, int cur_rows, int cur_cols, int **ext_mat)
 // {
-// 	int world_size, world_rank;
-//   MPI_Comm_size(MPI_COMM_WORLD, &world_size); // get the number of processes
-//   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank); // get the ranks for each individual process
+// 	// populate the corners of the ext_gol_map, in order, clockwise
+// 	ext_mat[0][0] = curr_mat[cur_rows-1][cur_cols-1]; // first corner
+// 	ext_mat[0][cur_cols+1] = curr_mat[cur_rows-1][0]; // second corner
+// 	ext_mat[cur_rows+1][cur_cols+1] = curr_mat[0][0]; // third corner
+// 	ext_mat[cur_rows+1][0] = curr_mat[0][cur_cols-1]; // fourth corner
 
-
-// 	// public variables per thread
-// 	int dead_cnt = 0; // counter for how many dead cells will be in the next generation
-// 	int cur_rows = ext_rows-2;
-
-
-//   // dont let <th_cnt_per_proc> exceed <mpi_chunk_sz>
-//   int mpi_max = floor(cur_rows / world_size);
-//   if(th_cnt > mpi_max)
-//   	th_cnt = mpi_max;
-
-
-//   #pragma omp parallel num_threads(th_cnt)
-//   {
-//   	// private variables per thread
-//   	int curr_sum = 0; // initialize the current neighbor sum
-//   	int thread_ID, th_cnt_per_proc;
-// 		thread_ID = omp_get_thread_num(); // unique thread
-// 		th_cnt_per_proc = omp_get_num_threads(); // quantity of threads per processor
-
-// 		int mpi_chunk_sz = floor(cur_rows / world_size);
-// 	  int omp_chunk_sz = floor(mpi_chunk_sz / th_cnt_per_proc);
-
-
-// 		if(world_rank == world_size - 1)
+// 	// copy all values from "cur_gol_map" to the center of "ext_gol_map"
+// 	for(int i = 0; i < cur_rows; i++)
+// 	{
+// 		for(int j = 0; j < cur_cols; j++)
 // 		{
-// 			int btm_mpi_chunk_sz = cur_rows - ((world_size - 1) * mpi_chunk_sz);
-// 			omp_chunk_sz = btm_mpi_chunk_sz / th_cnt_per_proc;
-// 		}
-
-// 		int omp_thread_row_start=(mpi_chunk_sz * world_rank) + (omp_chunk_sz * thread_ID);
-// 		int omp_thread_row_end = omp_thread_row_start + (omp_chunk_sz-1);
-
-
-// 		for(int i = omp_thread_row_start + 1; i <= omp_thread_row_end; i++)
-// 		{
-// 			for(int j = 1; j <= ext_cols-2; j++)
-// 			{
-// 				curr_sum = ext_mat[i+1][j] + ext_mat[i-1][j] + ext_mat[i][j+1] + ext_mat[i][j-1] + ext_mat[i-1][j+1] + ext_mat[i+1][j-1] + ext_mat[i+1][j+1] + ext_mat[i-1][j-1];
-
-// 				if((curr_sum < 2) && (ext_mat[i][j] == 1)) // if live cell has less than 2 neighbors
-// 				{
-// 					nxt_mat[i-1][j-1] = 0; // current cell dies, due to under population
-// 					dead_cnt++;
-// 				}
-// 				else if((curr_sum >= 2 && curr_sum <= 3) && (ext_mat[i][j] == 1)) // if live cell has 2~3 neighbors
-// 				{
-// 					nxt_mat[i-1][j-1] = 1; // current cell lives, thriving to the next generation
-// 				}
-// 				else if(curr_sum > 3 && (ext_mat[i][j] == 1)) // if live cell has more than 3 neighbors
-// 				{
-// 					nxt_mat[i-1][j-1] = 0; // current cell dies, due to overpopulation
-// 					dead_cnt++;
-// 				}
-// 				else if(curr_sum == 3 && (ext_mat[i][j] == 0)) // if dead cell has exactly 3 neighbors
-// 				{
-// 					nxt_mat[i-1][j-1] = 1; // current cell lives, due to repopulation and migration
-// 				}
-// 				else
-// 				{
-// 					nxt_mat[i-1][j-1] = 0; // default to dead cell
-// 					dead_cnt++;
-// 				}
-
-// 				curr_sum = 0; // reset the current neighbor sum
-// 			}
+// 			ext_mat[i+1][j+1] = curr_mat[i][j];
 // 		}
 // 	}
 
-// 	if(world_rank == 0)
-// 		return dead_cnt;
+// 	// copy the top and bottom rows of "cur_gol_map", swap them, an assign them to "ext_gol_map"
+// 	for(int j = 0; j < cur_cols; j++)
+// 	{
+// 		ext_mat[0][j+1] = curr_mat[cur_rows-1][j];
+// 		ext_mat[cur_rows+1][j+1] = curr_mat[0][j];
+// 	}
+
+// 	// copy the left and right cols of "cur_gol_map", swap them, an assign them to "ext_gol_map"
+// 	for(int i = 0; i < cur_rows; i++)
+// 	{
+// 		ext_mat[i+1][0] = curr_mat[i][cur_cols-1];
+// 		ext_mat[i+1][cur_cols+1] = curr_mat[i][0];
+// 	}
 // }
+
+
+void pop_nxt_gol_map(int prx_rows, int prx_cols, int th_cnt, int mpi_chunk_sz)
+{
+	int world_size, world_rank;
+  MPI_Comm_size(MPI_COMM_WORLD, &world_size); // get the number of processes
+  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank); // get the ranks for each individual process
+
+
+	// public variables per thread
+	int data_rows = prx_rows - 2;
+
+
+  // dont let <th_cnt_per_proc> exceed <mpi_chunk_sz>
+  if(th_cnt > data_rows)
+  	th_cnt = data_rows;
+
+
+  #pragma omp parallel num_threads(th_cnt)
+  {
+  	// private variables per thread
+  	int cell_sum = 0; // initialize the current neighbor sum
+  	int thread_ID, th_cnt_per_proc;
+		thread_ID = omp_get_thread_num(); // unique thread
+		th_cnt_per_proc = omp_get_num_threads(); // quantity of threads per processor
+
+		// int mpi_chunk_sz = floor(data_rows / world_size);
+		// if (mpi_chunk_sz == 0)
+		// 	mpi_chunk_sz = 1;
+	  int omp_chunk_sz = floor(data_rows / th_cnt_per_proc);
+	  if(omp_chunk_sz == 0)
+	  	omp_chunk_sz = 1;
+
+
+		// if(world_rank == world_size - 1)
+		// {
+		// 	int btm_mpi_chunk_sz = data_rows - ((world_size - 1) * mpi_chunk_sz);
+		// 	omp_chunk_sz = btm_mpi_chunk_sz / th_cnt_per_proc;
+		// }
+
+		int omp_thread_row_start = (omp_chunk_sz * thread_ID) + 1;
+		int omp_thread_row_end = omp_thread_row_start + (omp_chunk_sz - 1);
+		if(thread_ID == th_cnt_per_proc - 1)
+		{
+			omp_thread_row_end = data_rows;
+		}
+
+
+		for(int i = omp_thread_row_start; i <= omp_thread_row_end; i++)
+		{
+			for(int j = 1; j <= prx_cols - 2; j++)
+			{
+				cell_sum = prx_gol_map[i+1][j] + prx_gol_map[i-1][j] + prx_gol_map[i][j+1] + prx_gol_map[i][j-1] +
+									 prx_gol_map[i-1][j+1] + prx_gol_map[i+1][j-1] + prx_gol_map[i+1][j+1] + prx_gol_map[i-1][j-1];
+
+				if((cell_sum < 2) && (prx_gol_map[i][j] == 1)) // if live cell has less than 2 neighbors
+				{
+					nxt_gol_map[(i-1) + (mpi_chunk_sz * world_rank)][j-1] = 0; // current cell dies, due to under population
+				}
+				else if((cell_sum >= 2 && cell_sum <= 3) && (prx_gol_map[i][j] == 1)) // if live cell has 2~3 neighbors
+				{
+					nxt_gol_map[(i-1) + (mpi_chunk_sz * world_rank)][j-1] = 1; // current cell lives, thriving to the next generation
+				}
+				else if(cell_sum > 3 && (prx_gol_map[i][j] == 1)) // if live cell has more than 3 neighbors
+				{
+					nxt_gol_map[(i-1) + (mpi_chunk_sz * world_rank)][j-1] = 0; // current cell dies, due to overpopulation
+				}
+				else if(cell_sum == 3 && (prx_gol_map[i][j] == 0)) // if dead cell has exactly 3 neighbors
+				{
+					nxt_gol_map[(i-1) + (mpi_chunk_sz * world_rank)][j-1] = 1; // current cell lives, due to repopulation and migration
+				}
+				else
+				{
+					nxt_gol_map[(i-1) + (mpi_chunk_sz * world_rank)][j-1] = 0; // default to dead cell
+				}
+
+				cell_sum = 0; // reset the current neighbor sum
+			}
+		}
+	}
+}
 
 
 
