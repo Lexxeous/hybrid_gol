@@ -1,6 +1,6 @@
 # define default varaibles
-rows?=4
-cols?=4
+rows?=10
+cols?=10
 out_file?=init_gol.txt
 
 

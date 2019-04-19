@@ -1,14 +1,24 @@
 # define default varaibles
+procs?=3
 in_file?=init_gol.txt
+threads?=4
+gens?=2
 out_file?=result_gol.out
-gens?=20
 
 
 comp:
-	g++ -o seq_gol seq_gol.cpp
+	# g++ -o test_gol test_gol.cpp
+	mpic++ -fopenmp -o test_gol test_gol.cpp
 
 run:
-	./seq_gol $(in_file) $(gens) $(out_file)
+	# ./test_gol $(in_file) $(threads) $(gens) $(out_file)
+	mpirun -pernode ./test_gol $(in_file) $(threads) $(gens) $(out_file)
+
+debug:
+	# mpiCC -g hybrid_gol.cpp
+
+gdb:
+	# mpiexec -d -np $(procs) ./hybrid_gol $(in_file) $(threads) $(gens) $(out_file)
 
 clean:
-	rm seq_gol
+	rm test_gol
